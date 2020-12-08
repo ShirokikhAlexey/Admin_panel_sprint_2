@@ -1,11 +1,13 @@
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.db.models import Q
-from django.core.paginator import InvalidPage
 from django.http import JsonResponse, Http404
 from django.views.generic.detail import BaseDetailView
 from django.views.generic.list import BaseListView
+from django.core.paginator import Paginator, InvalidPage
 
 from movies.models import FilmWork
+
+PAGINATE_BY = 50
 
 
 class MoviesApiMixin:
@@ -32,34 +34,21 @@ class MoviesApiMixin:
 
 
 class Movies(MoviesApiMixin, BaseListView):
-    paginate_by = 50
 
     def get_context_data(self, *, object_list=None, **kwargs):
         queryset = self.get_queryset().values('id', 'title', 'description', 'creation_date',
                                               'rating', 'type', 'actors',
                                               'directors', 'writers', 'genres')
-        count, total, prev, next, result = self.paginate_queryset(queryset, self.paginate_by)
 
-        context = {
-            "count": count,
-            "total_pages": total,
-            "prev": prev,
-            "next": next,
-            'results': list(result)
-        }
-        return context
+        paginator = Paginator(queryset, per_page=PAGINATE_BY)
 
-    def paginate_queryset(self, queryset, page_size):
-        """Paginate the queryset, if needed."""
-        paginator = self.get_paginator(
-            queryset, page_size, orphans=self.get_paginate_orphans(),
-            allow_empty_first_page=self.get_allow_empty())
         page_kwarg = self.page_kwarg
-        page = self.kwargs.get(page_kwarg) or self.request.GET.get(page_kwarg) or 1
+        page_param = self.kwargs.get(page_kwarg) or self.request.GET.get(page_kwarg) or 1
+
         try:
-            page_number = int(page)
+            page_number = int(page_param)
         except ValueError:
-            if page == 'last':
+            if page_param == 'last':
                 page_number = paginator.num_pages
             else:
                 raise Http404()
@@ -74,10 +63,21 @@ class Movies(MoviesApiMixin, BaseListView):
                 prev = page.previous_page_number()
             else:
                 prev = None
-
-            return paginator.count, paginator.num_pages, prev, _next, page.object_list
         except InvalidPage as e:
             raise Http404()
+
+        context = {
+            "count": paginator.count,
+            "total_pages": paginator.num_pages,
+            "prev": prev,
+            "next": _next,
+            'results': page.object_list
+        }
+        return context
+
+    def render_to_response(self, context, **response_kwargs):
+        context['results'] = list(context['results'])
+        return JsonResponse(context)
 
 
 class MoviesDetailApi(MoviesApiMixin, BaseDetailView):
