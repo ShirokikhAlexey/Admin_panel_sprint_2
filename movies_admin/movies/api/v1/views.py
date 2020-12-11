@@ -40,38 +40,14 @@ class Movies(MoviesApiMixin, BaseListView):
                                               'rating', 'type', 'actors',
                                               'directors', 'writers', 'genres')
 
-        paginator = Paginator(queryset, per_page=PAGINATE_BY)
-
-        page_kwarg = self.page_kwarg
-        page_param = self.kwargs.get(page_kwarg) or self.request.GET.get(page_kwarg) or 1
-
-        try:
-            page_number = int(page_param)
-        except ValueError:
-            if page_param == 'last':
-                page_number = paginator.num_pages
-            else:
-                raise Http404()
-        try:
-            page = paginator.page(page_number)
-            if page.has_next():
-                _next = page.next_page_number()
-            else:
-                _next = None
-
-            if page.has_previous():
-                prev = page.previous_page_number()
-            else:
-                prev = None
-        except InvalidPage as e:
-            raise Http404()
+        paginator, page, object_list, has_other_pages = self.paginate_queryset(queryset, PAGINATE_BY)
 
         context = {
             "count": paginator.count,
             "total_pages": paginator.num_pages,
-            "prev": prev,
-            "next": _next,
-            'results': page.object_list
+            "prev": page.previous_page_number() if page.has_previous() else None,
+            "next": page.next_page_number() if page.has_next() else None,
+            'results': object_list
         }
         return context
 
